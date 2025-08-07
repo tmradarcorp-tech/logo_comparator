@@ -1,0 +1,6 @@
+streamlit
+pillow
+pandas
+torch
+open_clip_torch
+
