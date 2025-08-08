@@ -1,0 +1,7 @@
+# Исключаем базу данных и картинки
+documents.db
+батчинг-тест/
+images/
+*.pyc
+__pycache__/
+venv/
