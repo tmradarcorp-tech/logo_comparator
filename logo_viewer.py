@@ -1,24 +1,31 @@
 import streamlit as st
 import os
 import sqlite3
-from PIL import Image
+from PIL import Image, ImageEnhance
 import pandas as pd
 import re
+import numpy as np
 from datetime import datetime, date
+import torch
+import clip  # pip install git+https://github.com/openai/CLIP.git
 
-# --- Универсальные пути ---
+# Пути
+etalon_folder = "батчинг-тест/Сравнение/Эталон"
+compared_folder = "батчинг-тест/Сравнение/Противопоставленное"
+images_folder = "images"  # Папка с картинками заявок
+DB_PATH = "documents.db"
 
-if os.path.exists("/app/data"):  # В Docker
-    DATA_DIR = "/app/data"
-else:  # Локально
-    DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+BATCH_SIZE = 8
 
-DB_PATH = os.path.join(DATA_DIR, "documents.db")
-ETALON_FOLDER = os.path.join(DATA_DIR, "батчинг-тест", "Сравнение", "Эталон")
-COMPARED_FOLDER = os.path.join(DATA_DIR, "батчинг-тест", "Сравнение", "Противопоставленное")
-IMAGES_FOLDER = os.path.join(DATA_DIR, "images")  # Папка с картинками заявок
+# Инициализация CLIP
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model, preprocess = clip.load("ViT-B/32", device=device)
 
-# --- Функции ---
+def enhance_image(image: Image.Image) -> Image.Image:
+    """Простое улучшение контрастности для лучшего распознавания."""
+    enhancer = ImageEnhance.Contrast(image)
+    enhanced_img = enhancer.enhance(1.5)
+    return enhanced_img
 
 def extract_number(filename):
     match = re.match(r"(\d+)", filename)
@@ -38,14 +45,13 @@ def show_application_card(app_data):
         st.session_state.selected_app = None
         st.experimental_rerun()
 
-# --- Интерфейс ---
-
 st.title("🔍 Логотипы и заявки")
 
-tabs = st.tabs(["Визуальное сравнение", "Поиск по заявкам"])
+tabs = st.tabs(["Визуальное сравнение", "Поиск по заявкам", "Поиск по тексту (ИИ)"])
 
+# --- Вкладка 1: Визуальное сравнение ---
 with tabs[0]:
-    etalon_files = [f for f in os.listdir(ETALON_FOLDER) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+    etalon_files = [f for f in os.listdir(etalon_folder) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
     etalon_files.sort(key=extract_number)
 
     selected_etalon = st.selectbox("Выберите эталон", etalon_files)
@@ -66,16 +72,16 @@ with tabs[0]:
     df.insert(0, "Top", [f"Top {i+1}" for i in range(len(df))])
     select_options = [f"{row.Top} — {row.Файл}" for _, row in df.iterrows()]
     selected_option = st.selectbox("Выберите логотип из списка", select_options)
-    selected_file = selected_option.split(" — ", 1)[1]
+    selected_file = selected_option.split(" — ", 1)[1] if selected_option else None
 
     col1, col2 = st.columns(2)
     with col1:
-        etalon_path = os.path.join(ETALON_FOLDER, selected_etalon)
+        etalon_path = os.path.join(etalon_folder, selected_etalon)
         st.subheader("🎯 Эталон")
         st.image(etalon_path, caption=selected_etalon, width=300)
     with col2:
         if selected_file:
-            image_path = os.path.join(COMPARED_FOLDER, selected_file)
+            image_path = os.path.join(compared_folder, selected_file)
             try:
                 image = Image.open(image_path)
                 st.subheader("🤝 Похожий логотип")
@@ -86,12 +92,14 @@ with tabs[0]:
     st.subheader("📋 Таблица похожих логотипов (топ 5)")
     st.dataframe(df.head(5), use_container_width=True)
 
+# --- Вкладка 2: Поиск по заявкам ---
 with tabs[1]:
     st.title("🔎 Поиск по заявкам на регистрацию товарных знаков")
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
+    # Получаем уникальные классы
     cursor.execute("SELECT classes FROM documents_pdf")
     all_classes_raw = [row[0] for row in cursor.fetchall()]
     unique_classes = set()
@@ -99,6 +107,7 @@ with tabs[1]:
         unique_classes.update([c.strip() for c in cl_str.split(",") if c.strip()])
     unique_classes = sorted(unique_classes)
 
+    # Получаем минимальную и максимальную даты подачи для фильтра по дате
     cursor.execute("SELECT MIN(application_date), MAX(application_date) FROM documents_pdf")
     min_date_str, max_date_str = cursor.fetchone()
 
@@ -165,7 +174,7 @@ with tabs[1]:
                 app_num = row[0]
                 img_path = None
                 for ext in ['jpg', 'png']:
-                    path = os.path.join(IMAGES_FOLDER, f"{app_num}.{ext}")
+                    path = os.path.join(images_folder, f"{app_num}.{ext}")
                     if os.path.exists(path):
                         img_path = path
                         break
@@ -178,3 +187,68 @@ with tabs[1]:
                         st.write(f"🖼 Нет изображения для {app_num}")
                         if st.button(app_num, key=f"btn_{app_num}"):
                             show_application_card(all_apps[app_num])
+
+# --- Вкладка 3: Поиск по тексту (ИИ) ---
+with tabs[2]:
+    st.header("Поиск по тексту (ИИ)")
+    st.write("ИИ Поиск по тексту по всем товарным знакам в базе")
+
+    text_input = st.text_area("Введите текстовый запрос (можно несколько строк)", height=100)
+
+    if st.button("🔍 Запустить поиск"):
+        if not text_input.strip():
+            st.warning("Введите хотя бы один запрос.")
+        else:
+            folder = compared_folder
+
+            text_queries = [line.strip() for line in text_input.split("\n") if line.strip()]
+            text_tokens = clip.tokenize(text_queries).to(device)
+            with torch.no_grad():
+                text_features = model.encode_text(text_tokens)
+                text_features = text_features.mean(dim=0, keepdim=True)
+                text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+                text_features = text_features.cpu()
+
+            image_files = [f for f in os.listdir(folder) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
+            total_images = len(image_files)
+            results = []
+
+            progress_bar = st.progress(0, text=f"Обработано 0 из {total_images}")
+
+            for i in range(0, total_images, BATCH_SIZE):
+                batch_files = image_files[i:i + BATCH_SIZE]
+                batch_images = []
+                valid_files = []
+
+                for fname in batch_files:
+                    try:
+                        image_path = os.path.join(folder, fname)
+                        image = Image.open(image_path).convert("RGB")
+                        image = enhance_image(image)
+                        image_tensor = preprocess(image)
+                        batch_images.append(image_tensor)
+                        valid_files.append(fname)
+                    except Exception as e:
+                        st.warning(f"Ошибка с файлом {fname}: {e}")
+
+                if batch_images:
+                    batch_tensor = torch.stack(batch_images).to(device)
+                    with torch.no_grad():
+                        image_features = model.encode_image(batch_tensor)
+                        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+                        image_features = image_features.cpu()
+
+                    similarities = (image_features @ text_features.T).squeeze(1)
+
+                    for fname, sim in zip(valid_files, similarities):
+                        results.append((fname, sim.item()))
+
+                done = min(i + BATCH_SIZE, total_images)
+                progress_bar.progress(done / total_images, text=f"Обработано {done} из {total_images}")
+
+            results.sort(key=lambda x: x[1], reverse=True)
+            st.subheader("Результаты поиска (топ-5):")
+
+            for fname, score in results[:5]:
+                img_path = os.path.join(folder, fname)
+                st.image(img_path, caption=f"{fname} — Сходство: {score:.4f}")

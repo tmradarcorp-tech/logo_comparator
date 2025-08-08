@@ -1,5 +1,7 @@
-streamlit
+streamlit==1.25.0
+torch>=2.0.0
+torchvision
 pillow
 pandas
-torch
-open_clip_torch
+numpy
+git+https://github.com/openai/CLIP.git
