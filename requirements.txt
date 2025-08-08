@@ -1,8 +1,8 @@
 streamlit==1.26.0
-torch  # без +cpu, можно без версии или с 2.8.0
+torch==2.8.0
 ftfy
 regex
 tqdm
-pillow
+pillow>=11.0.0,<12.0.0
 pandas
 git+https://github.com/openai/CLIP.git
