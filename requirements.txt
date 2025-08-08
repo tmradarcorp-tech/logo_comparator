@@ -1,8 +1,8 @@
 streamlit==1.26.0
-torch==2.0.1+cpu
-ftfy==6.1.1
-regex==2023.6.3
-tqdm==4.65.0
-pillow==10.0.0
-git+https://github.com/openai/CLIP.git@main
-pandas==2.0.1
+torch  # без +cpu, можно без версии или с 2.8.0
+ftfy
+regex
+tqdm
+pillow
+pandas
+git+https://github.com/openai/CLIP.git
