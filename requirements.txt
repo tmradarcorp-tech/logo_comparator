@@ -1,8 +1,5 @@
-streamlit==1.26.0
-torch==2.8.0
-ftfy
-regex
-tqdm
-pillow>=11.0.0,<12.0.0
+streamlit
+pillow
 pandas
-git+https://github.com/openai/CLIP.git
+torch
+open_clip_torch
