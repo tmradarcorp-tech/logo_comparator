@@ -260,7 +260,7 @@ with tabs[2]:
                 img_path = os.path.join(COMPARED_FOLDER, fname)
                 try:
                     img = Image.open(img_path)
-                    st.image(img, use_column_width=True)
+                    st.image(img, use_container_width=True)  # <-- заменили use_column_width на use_container_width
                 except Exception:
                     st.error(f"Не удалось загрузить изображение {fname}")
 
