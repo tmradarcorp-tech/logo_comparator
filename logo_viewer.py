@@ -11,7 +11,7 @@ import clip
 # ==== ПУТИ ====
 ETALON_FOLDER = "батчинг-тест/Сравнение/Эталон"
 COMPARED_FOLDER = "батчинг-тест/Сравнение/Противопоставленное"
-IMAGES_FOLDER = "images"  # Папка с картинками заявок
+IMAGES_FOLDER = "images"
 DB_PATH = "documents.db"
 
 # ==== КЛИП ====
@@ -19,8 +19,6 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model_name = "ViT-B/16"
 model, preprocess = clip.load(model_name, device=device)
 BATCH_SIZE = 16
-
-# ==== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====
 
 def extract_number(filename):
     match = re.match(r"(\d+)", filename)
@@ -48,8 +46,6 @@ def enhance_image(image: Image.Image) -> Image.Image:
     image = ImageEnhance.Contrast(image).enhance(1.5)
     image = ImageEnhance.Sharpness(image).enhance(1.3)
     return image
-
-# ==== UI ====
 
 st.title("🔍 Логотипы и заявки")
 
@@ -97,7 +93,6 @@ with tabs[0]:
 
     st.subheader("📋 Таблица похожих логотипов (топ 5)")
     st.dataframe(df.head(5), use_container_width=True)
-
 
 # --- Вкладка 2: Поиск по заявкам ---
 with tabs[1]:
@@ -260,7 +255,7 @@ with tabs[2]:
                 img_path = os.path.join(COMPARED_FOLDER, fname)
                 try:
                     img = Image.open(img_path)
-                    st.image(img, use_container_width=True)  # <-- заменили use_column_width на use_container_width
+                    st.image(img, use_container_width=True)
                 except Exception:
                     st.error(f"Не удалось загрузить изображение {fname}")
 
