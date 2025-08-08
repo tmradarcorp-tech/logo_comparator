@@ -1,10 +1,8 @@
-streamlit>=1.23.1
-torch>=2.0.0
-transformers>=4.0.0
+streamlit
+torch
 ftfy
 regex
 tqdm
-clip-by-openai @ git+https://github.com/openai/CLIP.git
-Pillow
+pillow
+git+https://github.com/openai/CLIP.git
 pandas
-numpy
